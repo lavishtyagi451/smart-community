@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
-const ModerationLog = require("../models/ModerationLog.js");
-const ModerationReport = require("../models/moderationReport.js");
+const ModerationLog = require("../models/ModerationLog");
+const ModerationReport = require("../models/ModerationReport");
 const { getMessageTarget } = require("../services/moderationTargetAdapter");
 const { moderateText } = require("../services/aiModerationService");
 
