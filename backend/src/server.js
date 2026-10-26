@@ -1,14 +1,19 @@
-require("dotenv").config();
+
+
+const dns = require("node:dns")
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
+
+require("dotenv").config({
+    path: require("node:path").resolve(__dirname, "../.env")
+});
 
 const app = require("./app");
 const connectDB = require("./config/db");
 
-const PORT = process.env.PORT || 5000;
+const PORT =  5001;
 
 const startServer = async () => {
-    
     try {
-
         await connectDB();
 
         app.listen(PORT, () => {

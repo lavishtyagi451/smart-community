@@ -1,27 +1,33 @@
 const express = require("express");
-const cors = require("cors");
-const helmet = require("helmet");
-const authRoutes = require("./routes/authRoutes");
-
 const app = express();
 
-
-
-app.use(helmet());
-app.use(cors());
 app.use(express.json());
 
+//import routes
+const communityRoutes = require("./routes/communityRoutes");
+const authRoutes = require("./routes/authRoutes");
+const channelRoutes = require("./routes/channelRoutes");
+const moderationRoutes = require("./routes/moderationRoutes");
+
+
+
+app.use("/api/communities", communityRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/channels", channelRoutes);
+app.use("/api/moderation", moderationRoutes);
 
 
 app.get("/", (req, res) => {
-    res.status(200).json({
-        success: true,
-        message: "Smart Community API is running"
-     });
-
+res.status(200).json({
+message: "Welcome to the CSI Auth System API"
+});
 });
 
-// Authentication routes
-app.use("/api/auth", authRoutes);
+app.get("/api/health", (req, res) => {
+console.log("health ROUTE HIT");
+res.status(200).json({
+message: "Backend is healthy"
+});
+});
 
 module.exports = app;

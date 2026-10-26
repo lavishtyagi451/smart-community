@@ -111,11 +111,14 @@ const registerUser = async (req, res) => {
         });
 
         try {
-            await sendEmail(
-                email,
-                "Verify your CSI account",
-                `Your OTP is ${otp}. It expires in 5 minutes.`
-            );
+            await sendEmail({
+            to: email,
+            subject: "Verify your Smart Community account",
+            textContent: `Your OTP is ${otp}. It expires in 5 minutes.`,
+            htmlContent: `         <h2>Smart Community</h2>         <p>Your email verification OTP is:</p>         <h1>${otp}</h1>         <p>This OTP expires in 5 minutes.</p>         <p>Do not share this code with anyone.</p>
+    `
+});
+
         } catch (error) {
             // Remove the account if the verification email cannot be sent
             await User.findByIdAndDelete(user._id);
@@ -292,11 +295,14 @@ const resendOTP = async (req, res) => {
         await user.save();
 
         try {
-            await sendEmail(
-                email,
-                "Your new CSI verification OTP",
-                `Your new OTP is ${otp}. It expires in 5 minutes.`
-            );
+            await sendEmail({
+            to: email,
+            subject: "Your new Smart Community verification OTP",
+            textContent: `Your new OTP is ${otp}. It expires in 5 minutes.`,
+            htmlContent: `         <h2>Smart Community</h2>         <p>Your new email verification OTP is:</p>         <h1>${otp}</h1>         <p>This OTP expires in 5 minutes.</p>         <p>Do not share this code with anyone.</p>
+    `
+});
+
         } catch (error) {
             console.error("Resend OTP email error:", error.message);
 
@@ -526,7 +532,173 @@ const logoutUser = async (req, res) => {
             message: "Internal server error"
         });
     }
+
 };
+
+    //forgot  password
+const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email || typeof email !== "string") {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required.",
+            });
+        }
+
+        const normalizedEmail = email.trim().toLowerCase();
+
+        const user = await User.findOne({
+            email: normalizedEmail,
+        });
+
+        // Don't reveal whether an account exists.
+        const response = {
+            success: true,
+            message:
+                "If an account exists with this email, a password reset link will be sent.",
+        };
+
+        if (!user) {
+            return res.status(200).json(response);
+        }
+
+        // Generate a secure random token.
+        const resetToken = crypto.randomBytes(32).toString("hex");
+
+        // Store only the hash in the database.
+        const resetTokenHash = crypto
+            .createHash("sha256")
+            .update(resetToken)
+            .digest("hex");
+
+        user.passwordResetTokenHash = resetTokenHash;
+
+        user.passwordResetExpiresAt = new Date(
+            Date.now() + 15 * 60 * 1000
+        );
+
+        await user.save();
+
+        const frontendUrl = process.env.FRONTEND_URL;
+
+        if (!frontendUrl) {
+            throw new Error("FRONTEND_URL is not configured.");
+        }
+
+        const resetLink =
+            `${frontendUrl.replace(/\/$/, "")}` +
+            `/reset-password?token=${resetToken}`;
+
+        await sendEmail({
+        to: user.email,
+        subject: "Reset Your Smart Community Password",
+        textContent: `Reset your password using this link: ${resetLink}`,
+        htmlContent: `
+                    <h2>Password Reset</h2>
+                    <p>Click the link below to reset your password.</p>
+                    <a href="${resetLink}">Reset Password</a>
+                    <p>This link expires in 15 minutes.</p>
+    `
+        });
+
+        return res.status(200).json(response);
+    } catch (error) {
+        console.error("Forgot password error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to process the password reset request.",
+        });
+    }
+};
+
+//reset password
+const resetPassword = async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+
+        if (
+            typeof token !== "string" ||
+            !token.trim() ||
+            typeof newPassword !== "string"
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Token and new password are required.",
+            });
+        }
+
+        
+        if (newPassword.length < 12) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Password must be at least 12 characters long.",
+            });
+        }
+
+        
+        if (Buffer.byteLength(newPassword, "utf8") > 72) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Password must not exceed 72 UTF-8 bytes.",
+            });
+        }
+
+        // hashing the submitted token so it can be compared with
+        // the hash stored in MongoDB.
+        const resetTokenHash = crypto
+            .createHash("sha256")
+            .update(token.trim())
+            .digest("hex");
+
+        
+        const user = await User.findOne({
+            passwordResetTokenHash: resetTokenHash,
+            passwordResetExpiresAt: {
+                $gt: new Date(),
+            },
+        }).select(
+            "+passwordResetTokenHash +passwordResetExpiresAt"
+        );
+
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Password reset link is invalid or has expired.",
+            });
+        }
+
+        // Hash the new password before storing it.
+        const passwordHash = await bcrypt.hash(newPassword, 12);
+
+        user.passwordHash = passwordHash;
+
+        // Invalidate the reset token so it cannot be reused.
+        user.passwordResetTokenHash = undefined;
+        user.passwordResetExpiresAt = undefined;
+
+        await user.save();
+
+        return res.status(200).json({
+            success: true,
+            message:
+                "Password reset successful. Please log in with your new password.",
+        });
+    } catch (error) {
+        console.error("Reset password error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Unable to reset password.",
+        });
+    }
+};
+
 
 
 module.exports = {
@@ -535,5 +707,7 @@ module.exports = {
     resendOTP,
     loginUser,
     refreshAccessToken,
-    logoutUser
+    logoutUser,
+    forgotPassword,
+    resetPassword,
 };
